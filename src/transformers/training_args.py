@@ -10,6 +10,17 @@ from .file_utils import cached_property, is_torch_available, torch_required
 if is_torch_available():
     import torch
 
+try:
+    import torch_xla.core.xla_model as xm
+
+    _has_tpu = True
+except ImportError:
+    _has_tpu = False
+
+
+def is_tpu_available():
+    return _has_tpu
+
 
 logger = logging.getLogger(__name__)
 
@@ -94,7 +105,8 @@ class TrainingArguments:
         },
     )
     local_rank: int = field(default=-1, metadata={"help": "For distributed training: local_rank"})
-
+    use_tpu: bool = field(default=False, metadata={"help": "Whether to use a TPU device."})
+    
     @property
     def train_batch_size(self) -> int:
         return self.per_gpu_train_batch_size * max(1, self.n_gpu)
@@ -109,6 +121,9 @@ class TrainingArguments:
         logger.info("PyTorch: setting up devices")
         if self.no_cuda:
             device = torch.device("cpu")
+            n_gpu = 0
+        elif self.use_tpu and is_tpu_available():
+            device = xm.xla_device()
             n_gpu = 0
         elif self.local_rank == -1:
             # if n_gpu is > 1 we'll use nn.DataParallel.

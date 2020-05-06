@@ -21,7 +21,7 @@ from .data.data_collator import DataCollator, DefaultDataCollator
 from .modeling_utils import PreTrainedModel
 from .optimization import AdamW, get_linear_schedule_with_warmup
 from .trainer_utils import PREFIX_CHECKPOINT_DIR, EvalPrediction, PredictionOutput, TrainOutput
-from .training_args import TrainingArguments
+from .training_args import TrainingArguments, is_tpu_available
 
 
 try:
@@ -35,7 +35,9 @@ except ImportError:
 def is_apex_available():
     return _has_apex
 
-
+if is_tpu_available():
+    import torch_xla.core.xla_model as xm
+    
 try:
     from torch.utils.tensorboard import SummaryWriter
 
@@ -332,7 +334,10 @@ class Trainer:
                     else:
                         torch.nn.utils.clip_grad_norm_(model.parameters(), self.args.max_grad_norm)
 
-                    optimizer.step()
+                    if is_tpu_available():
+                        xm.optimizer_step(optimizer)
+                    else:
+                        optimizer.step()
                     scheduler.step()
                     model.zero_grad()
                     global_step += 1
